@@ -5,7 +5,7 @@ from collections.abc import AsyncIterator
 import httpx
 from dishka import Provider, Scope, provide
 
-from app.clients.example_service import ExampleServiceClient
+from app.api.modules.fraud.services.network import IpGeoClient
 from app.settings import Config
 
 
@@ -50,28 +50,17 @@ class HttpClientsProvider(Provider):
         async with httpx.AsyncClient(
             timeout=httpx.Timeout(30.0),
             limits=httpx.Limits(max_connections=100, max_keepalive_connections=20),
-            http2=True,
             follow_redirects=True,
         ) as client:
             yield client
 
-    @provide(scope=Scope.REQUEST)
-    def get_example_service_client(
+    @provide(scope=Scope.APP)
+    def get_ip_geo_client(
         self,
         client: httpx.AsyncClient,
         config: Config,
-    ) -> ExampleServiceClient:
-        """Provide Example Service HTTP client.
-
-        Scope: REQUEST - new instance per request.
-        This is appropriate for most HTTP clients as they are lightweight
-        wrappers around the shared httpx.AsyncClient.
-
-        :param client: Shared httpx AsyncClient (APP scope)
-        :param config: Application configuration (APP scope)
-        :return: Configured ExampleServiceClient instance
-        """
-        return ExampleServiceClient(client, config)
+    ) -> IpGeoClient:
+        return IpGeoClient(client, config)
 
     # Add more client providers here as needed:
     #

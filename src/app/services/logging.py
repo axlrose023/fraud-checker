@@ -11,11 +11,6 @@ def setup_logging(env: Literal["local", "dev", "prod"]) -> None:
     """Setup logging configuration based on the environment."""
     if env in ("local", "dev"):
         logging.basicConfig(level=logging.DEBUG, format=LOG_FORMAT_DEBUG)
-        logging.info("Logging is set to DEBUG level")
     else:
         logging.basicConfig(level=logging.INFO, format=LOG_FORMAT_PROD)
-        logging.info("Logging is set to INFO level")
-
-    logging.getLogger("aiogram").setLevel(logging.INFO)
-    logging.getLogger("aiogram_dialog").setLevel(logging.INFO)
-    logging.getLogger("telethon").setLevel(logging.WARNING)
+    logging.getLogger("httpx").setLevel(logging.WARNING)
