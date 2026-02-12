@@ -5,7 +5,7 @@ ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
     PYTHONPATH=/app/src
 
-RUN apk add --no-cache build-base postgresql-dev
+RUN apk add --no-cache build-base
 
 WORKDIR /app
 
@@ -19,7 +19,6 @@ RUN --mount=type=cache,target=/root/.cache/uv \
 
 COPY src/ ./src/
 COPY README.md ./
-COPY alembic.ini ./
 
 # Install the project itself
 RUN --mount=type=cache,target=/root/.cache/uv \
@@ -31,8 +30,6 @@ COPY --from=ghcr.io/astral-sh/uv:latest /uv /bin/uv
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
     PYTHONPATH=/app/src
-
-RUN apk add --no-cache build-base postgresql-dev wget
 
 WORKDIR /app
 
@@ -46,7 +43,6 @@ RUN chown -R appuser:appgroup /app
 COPY --from=builder --chown=appuser:appuser /app/.venv /app/.venv
 COPY --from=builder --chown=appuser:appuser /app/src /app/src
 COPY --from=builder --chown=appuser:appuser /app/README.md /app/README.md
-COPY --from=builder --chown=appuser:appuser /app/alembic.ini /app/alembic.ini
 
 USER appuser
 
