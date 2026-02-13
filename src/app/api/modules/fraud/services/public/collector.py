@@ -1,6 +1,7 @@
 def build_collector_script(
     default_check_endpoint: str = "/fraud/check",
     default_captcha_verify_endpoint: str = "/fraud/captcha/verify",
+    turnstile_js_url: str = "https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit",
 ) -> str:
     return f"""(function(global) {{
   const _scriptPromises = {{}};
@@ -28,6 +29,7 @@ def build_collector_script(
   async function postJson(endpoint, body) {{
     const response = await fetch(endpoint, {{
       method: 'POST',
+      credentials: 'omit',
       headers: {{ 'Content-Type': 'application/json' }},
       body: JSON.stringify(body)
     }});
@@ -155,7 +157,7 @@ def build_collector_script(
   }}
 
   async function getTurnstileToken(siteKey, container, options) {{
-    await loadScriptOnce('https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit');
+    await loadScriptOnce('{turnstile_js_url}');
     if (!global.turnstile || !global.turnstile.render) {{
       throw new Error('Turnstile is not available after loading the script');
     }}
@@ -166,14 +168,16 @@ def build_collector_script(
     }}
     el.innerHTML = '';
 
+    const timeoutMs = (options && options.timeout) || 60000;
     return await new Promise((resolve, reject) => {{
+      const timer = setTimeout(() => reject(new Error('Captcha timed out')), timeoutMs);
       global.turnstile.render(el, {{
         sitekey: siteKey,
         size: (options && options.size) || 'normal',
         action: (options && options.action) || undefined,
         cData: (options && options.cdata) || undefined,
-        callback: (token) => resolve(token),
-        'error-callback': () => reject(new Error('Captcha error')),
+        callback: (token) => {{ clearTimeout(timer); resolve(token); }},
+        'error-callback': () => {{ clearTimeout(timer); reject(new Error('Captcha error')); }},
       }});
     }});
   }}
@@ -219,6 +223,7 @@ def build_collector_script(
     collectSignals,
     check,
     verifyCaptcha,
+    getTurnstileToken,
     run
   }};
 }})(window);

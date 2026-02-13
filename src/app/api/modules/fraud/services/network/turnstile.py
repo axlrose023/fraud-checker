@@ -8,9 +8,6 @@ from app.settings import Config
 logger = logging.getLogger(__name__)
 
 
-TURNSTILE_VERIFY_URL = "https://challenges.cloudflare.com/turnstile/v0/siteverify"
-
-
 @dataclass(slots=True)
 class TurnstileVerificationResult:
     success: bool
@@ -24,6 +21,7 @@ class TurnstileVerifierService:
         self._client = client
         self._site_key = config.fraud.turnstile_site_key
         self._secret_key = config.fraud.turnstile_secret_key
+        self._verify_url = config.fraud.turnstile_verify_url
         self._timeout = config.fraud.turnstile_timeout_seconds
 
     @property
@@ -57,7 +55,7 @@ class TurnstileVerifierService:
 
         try:
             response = await self._client.post(
-                TURNSTILE_VERIFY_URL,
+                self._verify_url,
                 data=form,
                 timeout=self._timeout,
                 follow_redirects=True,

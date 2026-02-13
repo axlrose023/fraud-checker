@@ -26,8 +26,8 @@ def decision_for_score(
     block_score_threshold: int,
     review_score_threshold: int,
 ) -> str:
-    if score >= block_score_threshold:
-        return "block"
+    # block_score_threshold is kept for backwards compatibility but not used
+    # everything >= review_score_threshold goes to "review" (captcha)
     if score >= review_score_threshold:
         return "review"
     return "allow"

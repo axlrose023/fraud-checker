@@ -38,10 +38,9 @@
 | Решение | Score | Что значит |
 |---------|-------|------------|
 | **allow** | 0–39 | Запрос выглядит легитимным, пропускаем |
-| **review** | 40–69 | Подозрительный запрос, требуется капча |
-| **block** | 70–100 | Высокая вероятность бота/фрода, блокируем |
+| **review** | 40–100 | Подозрительный запрос, требуется капча |
 
-Пороги настраиваются через переменные окружения (`BLOCK_SCORE_THRESHOLD`, `REVIEW_SCORE_THRESHOLD`).
+Порог настраивается через переменную окружения `REVIEW_SCORE_THRESHOLD` (по умолчанию 40).
 
 ---
 
@@ -109,8 +108,8 @@
 
 - Обычный посетитель: score = 0 → **allow**
 - HeadlessChrome: `AUTOMATION_UA_MARKER` (55) → score = 55 → **review** → капча
-- Selenium + WebDriver: `WEBDRIVER_ENABLED` (70) → score = 70 → **block**
-- curl: `STRONG_BOT_UA_MARKER` (85) → score = 85 → **block**
+- Selenium + WebDriver: `WEBDRIVER_ENABLED` (70) → score = 70 → **review** → капча
+- curl: `STRONG_BOT_UA_MARKER` (85) → score = 85 → **review** → капча
 
 ---
 
@@ -187,8 +186,7 @@ docker compose up --build -d
 
 | Переменная | По умолчанию | Описание |
 |-----------|-------------|----------|
-| `APP__FRAUD__BLOCK_SCORE_THRESHOLD` | 70 | Порог блокировки |
-| `APP__FRAUD__REVIEW_SCORE_THRESHOLD` | 40 | Порог показа капчи |
+| `APP__FRAUD__REVIEW_SCORE_THRESHOLD` | 40 | Порог показа капчи (всё что ≥ этого значения → review) |
 | `APP__FRAUD__RATE_LIMIT_WINDOW_SECONDS` | 60 | Окно rate limit |
 | `APP__FRAUD__RATE_LIMIT_MAX_REQUESTS_PER_IP` | 120 | Лимит запросов с одного IP |
 | `APP__FRAUD__IP_GEOLOCATION_ENABLED` | false | Включить IP-геолокацию |

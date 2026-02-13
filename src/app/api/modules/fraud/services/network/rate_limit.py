@@ -6,7 +6,6 @@ _PURGE_EVERY = 512
 
 
 class InMemoryIpRateLimiter:
-    """Simple sliding-window limiter for public API abuse protection."""
 
     def __init__(self, window_seconds: int, max_requests_per_ip: int):
         self._window_seconds = window_seconds

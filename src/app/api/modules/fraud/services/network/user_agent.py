@@ -1,4 +1,3 @@
-"""User-Agent helpers and marker sets used by multiple checks."""
 
 MOBILE_UA_MARKERS = ("android", "iphone", "ipad", "ipod", "mobile")
 AUTOMATION_MARKERS = (

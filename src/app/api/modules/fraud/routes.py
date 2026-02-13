@@ -9,6 +9,7 @@ from app.api.modules.fraud.schema import (
 )
 from app.api.modules.fraud.service import FraudFacadeService
 from app.api.modules.fraud.services.public.collector import build_collector_script
+from app.settings import Config
 
 router = APIRouter(route_class=DishkaRoute)
 
@@ -32,6 +33,8 @@ async def verify_captcha(
 
 
 @router.get("/collector.js", status_code=200)
-async def get_collector_script() -> Response:
-    script = build_collector_script()
+async def get_collector_script(config: FromDishka[Config]) -> Response:
+    script = build_collector_script(
+        turnstile_js_url=config.fraud.turnstile_js_url,
+    )
     return Response(content=script, media_type="application/javascript")

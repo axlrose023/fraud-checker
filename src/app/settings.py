@@ -30,6 +30,8 @@ class FraudConfig(BaseModel):
     # Optional Turnstile captcha challenge for suspicious traffic.
     turnstile_site_key: str | None = None
     turnstile_secret_key: str | None = None
+    turnstile_verify_url: str = "https://challenges.cloudflare.com/turnstile/v0/siteverify"
+    turnstile_js_url: str = "https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit"
     turnstile_timeout_seconds: float = 2.0
     turnstile_challenge_ttl_seconds: int = 600  # 10 minutes
 
