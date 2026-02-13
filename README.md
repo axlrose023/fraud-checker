@@ -108,7 +108,11 @@ curl -X POST http://localhost:8000/fraud/check \
 
 ## Captcha Challenge (Опционально)
 
-Если включить капчу, то при решении `review` сервис вернет `captcha_required=true` и `challenge_id`.
+Капча Turnstile включается автоматически, если заданы:
+- `APP__FRAUD__TURNSTILE_SITE_KEY`
+- `APP__FRAUD__TURNSTILE_SECRET_KEY`
+
+При решении `review` сервис вернет `captcha_required=true` и `challenge_id`.
 После прохождения капчи лендинг должен отправить `captcha_token` на `POST /fraud/captcha/verify`.
 
 ### Интеграция с лендинга

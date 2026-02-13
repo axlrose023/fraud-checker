@@ -21,9 +21,9 @@ from app.api.modules.fraud.services.core.challenge_store import (
     InMemoryCaptchaChallengeStore,
 )
 from app.api.modules.fraud.services.network import (
-    CaptchaVerifierService,
     InMemoryIpRateLimiter,
     RequestIpResolver,
+    TurnstileVerifierService,
     normalize_headers,
 )
 from app.settings import Config
@@ -37,7 +37,7 @@ class FraudFacadeService:
         ip_resolver: RequestIpResolver,
         client_checks: ClientChecksCollector,
         network_checks: NetworkChecksCollector,
-        captcha_verifier: CaptchaVerifierService,
+        turnstile_verifier: TurnstileVerifierService,
         captcha_challenges: InMemoryCaptchaChallengeStore,
     ):
         self._config = config
@@ -45,7 +45,7 @@ class FraudFacadeService:
         self._ip_resolver = ip_resolver
         self._client_checks = client_checks
         self._network_checks = network_checks
-        self._captcha_verifier = captcha_verifier
+        self._turnstile_verifier = turnstile_verifier
         self._captcha_challenges = captcha_challenges
 
     async def check_request(
@@ -123,7 +123,7 @@ class FraudFacadeService:
         )
         if (
             decision == "review"
-            and self._captcha_verifier.is_configured()
+            and self._turnstile_verifier.is_configured()
             and self._captcha_challenges.ttl_seconds > 0
         ):
             challenge_id = await self._captcha_challenges.create(
@@ -132,8 +132,8 @@ class FraudFacadeService:
                 origin=origin,
             )
             response.captcha_required = True
-            response.captcha_provider = self._captcha_verifier.provider
-            response.captcha_site_key = self._captcha_verifier.site_key
+            response.captcha_provider = self._turnstile_verifier.provider
+            response.captcha_site_key = self._turnstile_verifier.site_key
             response.challenge_id = challenge_id
 
         return response
@@ -191,7 +191,7 @@ class FraudFacadeService:
                     detail="captcha_challenge_origin_mismatch",
                 )
 
-        verification = await self._captcha_verifier.verify(
+        verification = await self._turnstile_verifier.verify(
             token=payload.captcha_token,
             remote_ip=request_ip,
         )
@@ -211,8 +211,8 @@ class FraudFacadeService:
                 signals=base.signals,
                 captcha_required=False,
                 captcha_verified=True,
-                captcha_provider=self._captcha_verifier.provider,
-                captcha_site_key=self._captcha_verifier.site_key,
+                captcha_provider=self._turnstile_verifier.provider,
+                captcha_site_key=self._turnstile_verifier.site_key,
                 captcha_error_codes=[],
                 challenge_id=payload.challenge_id,
                 evaluated_at=datetime.now(UTC),
@@ -229,8 +229,8 @@ class FraudFacadeService:
             signals=base.signals,
             captcha_required=True,
             captcha_verified=False,
-            captcha_provider=self._captcha_verifier.provider,
-            captcha_site_key=self._captcha_verifier.site_key,
+            captcha_provider=self._turnstile_verifier.provider,
+            captcha_site_key=self._turnstile_verifier.site_key,
             captcha_error_codes=verification.error_codes,
             challenge_id=payload.challenge_id,
             evaluated_at=datetime.now(UTC),

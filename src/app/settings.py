@@ -27,14 +27,11 @@ class FraudConfig(BaseModel):
     ip_geolocation_base_url: str = "https://ipapi.co"
     ip_geolocation_cache_ttl_seconds: int = 300
 
-    # Optional captcha challenge for suspicious traffic.
-    captcha_enabled: bool = False
-    captcha_provider: Literal["turnstile", "hcaptcha", "recaptcha"] = "turnstile"
-    captcha_site_key: str | None = None
-    captcha_secret_key: str | None = None
-    captcha_timeout_seconds: float = 2.0
-    captcha_verify_url: str | None = None
-    captcha_challenge_ttl_seconds: int = 600  # 10 minutes
+    # Optional Turnstile captcha challenge for suspicious traffic.
+    turnstile_site_key: str | None = None
+    turnstile_secret_key: str | None = None
+    turnstile_timeout_seconds: float = 2.0
+    turnstile_challenge_ttl_seconds: int = 600  # 10 minutes
 
 
 @final

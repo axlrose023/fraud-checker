@@ -1,7 +1,3 @@
-from app.api.modules.fraud.services.network.captcha import (
-    CaptchaVerificationResult,
-    CaptchaVerifierService,
-)
 from app.api.modules.fraud.services.network.client import IpGeoClient, IpGeoResult
 from app.api.modules.fraud.services.network.common import (
     RequestIpResolver,
@@ -10,14 +6,18 @@ from app.api.modules.fraud.services.network.common import (
     normalize_text,
 )
 from app.api.modules.fraud.services.network.rate_limit import InMemoryIpRateLimiter
+from app.api.modules.fraud.services.network.turnstile import (
+    TurnstileVerificationResult,
+    TurnstileVerifierService,
+)
 
 __all__ = (
-    "CaptchaVerificationResult",
-    "CaptchaVerifierService",
     "InMemoryIpRateLimiter",
     "IpGeoClient",
     "IpGeoResult",
     "RequestIpResolver",
+    "TurnstileVerificationResult",
+    "TurnstileVerifierService",
     "normalize_headers",
     "normalize_ip",
     "normalize_text",

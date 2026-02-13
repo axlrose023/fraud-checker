@@ -14,10 +14,10 @@ from app.api.modules.fraud.services.core.challenge_store import (
     InMemoryCaptchaChallengeStore,
 )
 from app.api.modules.fraud.services.network import (
-    CaptchaVerifierService,
     InMemoryIpRateLimiter,
     IpGeoClient,
     RequestIpResolver,
+    TurnstileVerifierService,
 )
 from app.api.modules.fraud.services.network.headers import HeaderConsistencyService
 from app.api.modules.fraud.services.platform.system import SystemFingerprintService
@@ -85,7 +85,7 @@ class ServicesProvider(Provider):
     @provide(scope=Scope.APP)
     def get_captcha_challenge_store(self, config: Config) -> InMemoryCaptchaChallengeStore:
         return InMemoryCaptchaChallengeStore(
-            ttl_seconds=config.fraud.captcha_challenge_ttl_seconds,
+            ttl_seconds=config.fraud.turnstile_challenge_ttl_seconds,
         )
 
     @provide(scope=Scope.APP)
@@ -128,7 +128,7 @@ class ServicesProvider(Provider):
         request_ip_resolver: RequestIpResolver,
         client_checks: ClientChecksCollector,
         network_checks: NetworkChecksCollector,
-        captcha_verifier: CaptchaVerifierService,
+        turnstile_verifier: TurnstileVerifierService,
         captcha_challenge_store: InMemoryCaptchaChallengeStore,
     ) -> FraudFacadeService:
         return FraudFacadeService(
@@ -137,7 +137,7 @@ class ServicesProvider(Provider):
             ip_resolver=request_ip_resolver,
             client_checks=client_checks,
             network_checks=network_checks,
-            captcha_verifier=captcha_verifier,
+            turnstile_verifier=turnstile_verifier,
             captcha_challenges=captcha_challenge_store,
         )
 
