@@ -7,6 +7,7 @@ from fastapi import APIRouter, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.api import register_routers
+from app.api.middleware import ApiKeyMiddleware
 from app.ioc import get_async_container
 from app.services.logging import setup_logging
 from app.settings import get_config
@@ -31,6 +32,9 @@ def get_production_app() -> FastAPI:
         version=config.api.version,
         lifespan=lifespan,
     )
+
+    if config.api.api_key:
+        app.add_middleware(ApiKeyMiddleware, api_key=config.api.api_key)
 
     app.add_middleware(
         CORSMiddleware,

@@ -63,6 +63,18 @@ class ClientHintsSignals(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
 
+class BehaviorSignals(BaseModel):
+    time_on_page_ms: int | None = Field(default=None, ge=0, le=3_600_000)
+    max_scroll_y: int | None = Field(default=None, ge=0, le=100_000)
+    scroll_count: int | None = Field(default=None, ge=0, le=100_000)
+    document_height: int | None = Field(default=None, ge=0, le=100_000)
+    keydown_count: int | None = Field(default=None, ge=0, le=100_000)
+    mouse_move_count: int | None = Field(default=None, ge=0, le=1_000_000)
+    touch_count: int | None = Field(default=None, ge=0, le=100_000)
+
+    model_config = ConfigDict(extra="forbid")
+
+
 class FraudCheckRequest(BaseModel):
     event_id: str | None = Field(default=None, max_length=128)
     session_id: str | None = Field(default=None, max_length=128)
@@ -73,6 +85,7 @@ class FraudCheckRequest(BaseModel):
     webgl: WebGLSignals | None = None
     location: LocationSignals | None = None
     client_hints: ClientHintsSignals | None = None
+    behavior: BehaviorSignals | None = None
     collected_at: datetime | None = None
 
     model_config = ConfigDict(extra="forbid")

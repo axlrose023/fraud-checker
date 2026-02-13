@@ -6,6 +6,7 @@ from app.api.modules.fraud.services.collectors import (
     ClientChecksCollector,
     NetworkChecksCollector,
 )
+from app.api.modules.fraud.services.context.behavior import BehaviorConsistencyService
 from app.api.modules.fraud.services.context.device import DeviceConsistencyService
 from app.api.modules.fraud.services.context.geo import GeoConsistencyService
 from app.api.modules.fraud.services.context.ip import IpConsistencyService
@@ -79,6 +80,10 @@ class ServicesProvider(Provider):
         return IpConsistencyService()
 
     @provide(scope=Scope.APP)
+    def get_behavior_checks_service(self) -> BehaviorConsistencyService:
+        return BehaviorConsistencyService()
+
+    @provide(scope=Scope.APP)
     def get_geo_checks_service(self) -> GeoConsistencyService:
         return GeoConsistencyService()
 
@@ -98,6 +103,7 @@ class ServicesProvider(Provider):
         timestamp_checks: TimestampConsistencyService,
         system_checks: SystemFingerprintService,
         ip_checks: IpConsistencyService,
+        behavior_checks: BehaviorConsistencyService,
     ) -> ClientChecksCollector:
         return ClientChecksCollector(
             automation_checks=automation_checks,
@@ -107,6 +113,7 @@ class ServicesProvider(Provider):
             timestamp_checks=timestamp_checks,
             system_checks=system_checks,
             ip_checks=ip_checks,
+            behavior_checks=behavior_checks,
         )
 
     @provide(scope=Scope.REQUEST)

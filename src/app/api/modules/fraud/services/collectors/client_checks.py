@@ -1,5 +1,6 @@
 from app.api.modules.fraud.schema import FraudCheckRequest, FraudSignal
 from app.api.modules.fraud.services.automation import AutomationChecksService
+from app.api.modules.fraud.services.context.behavior import BehaviorConsistencyService
 from app.api.modules.fraud.services.context.device import DeviceConsistencyService
 from app.api.modules.fraud.services.context.ip import IpConsistencyService
 from app.api.modules.fraud.services.context.locale import LocaleConsistencyService
@@ -21,6 +22,7 @@ class ClientChecksCollector:
         timestamp_checks: TimestampConsistencyService,
         system_checks: SystemFingerprintService,
         ip_checks: IpConsistencyService,
+        behavior_checks: BehaviorConsistencyService,
     ):
         self._automation_checks = automation_checks
         self._device_checks = device_checks
@@ -29,6 +31,7 @@ class ClientChecksCollector:
         self._timestamp_checks = timestamp_checks
         self._system_checks = system_checks
         self._ip_checks = ip_checks
+        self._behavior_checks = behavior_checks
 
     def collect(
         self,
@@ -68,6 +71,7 @@ class ClientChecksCollector:
                 request_ip=request_ip,
             )
         )
+        signals.extend(self._behavior_checks.collect(payload=payload))
         return signals
 
 

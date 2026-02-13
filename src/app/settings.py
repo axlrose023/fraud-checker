@@ -11,6 +11,7 @@ class APIConfig(BaseModel):
     port: int = 8000
     host: str = "0.0.0.0"
     allowed_hosts: list[str] = ["*"]
+    api_key: str | None = None
 
 
 class FraudConfig(BaseModel):

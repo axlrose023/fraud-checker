@@ -93,6 +93,44 @@ def build_collector_script(
     }};
   }}
 
+  // ---- Behavioral tracking ----
+  const _bhv = {{
+    t0: Date.now(),
+    maxY: 0,
+    scrolls: 0,
+    keys: 0,
+    mouse: 0,
+    touch: 0
+  }};
+  (function() {{
+    if (typeof document === 'undefined') return;
+    var opts = {{ passive: true }};
+    document.addEventListener('scroll', function() {{
+      _bhv.scrolls++;
+      var y = global.pageYOffset || document.documentElement.scrollTop || 0;
+      if (y > _bhv.maxY) _bhv.maxY = y;
+    }}, opts);
+    document.addEventListener('keydown', function() {{ _bhv.keys++; }}, opts);
+    document.addEventListener('mousemove', function() {{ _bhv.mouse++; }}, opts);
+    document.addEventListener('touchstart', function() {{ _bhv.touch++; }}, opts);
+  }})();
+
+  function getBehavior() {{
+    var docH = Math.max(
+      document.body ? document.body.scrollHeight : 0,
+      document.documentElement ? document.documentElement.scrollHeight : 0
+    );
+    return {{
+      time_on_page_ms: Date.now() - _bhv.t0,
+      max_scroll_y: _bhv.maxY,
+      scroll_count: _bhv.scrolls,
+      document_height: docH,
+      keydown_count: _bhv.keys,
+      mouse_move_count: _bhv.mouse,
+      touch_count: _bhv.touch
+    }};
+  }}
+
   async function collectSignals(options) {{
     const geo = await maybeGetGeo(options || {{}});
     const tz = Intl.DateTimeFormat().resolvedOptions().timeZone || null;
@@ -136,6 +174,7 @@ def build_collector_script(
         accuracy_meters: geo ? geo.accuracy_meters : null
       }},
       client_hints: getClientHints(),
+      behavior: getBehavior(),
       collected_at: new Date().toISOString()
     }};
 
