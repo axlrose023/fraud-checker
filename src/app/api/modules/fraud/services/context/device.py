@@ -213,7 +213,7 @@ class DeviceConsistencyService:
                 )
             )
 
-        if not is_mobile_ua and payload.navigator.max_touch_points >= 10:
+        if not is_mobile_ua and (payload.navigator.max_touch_points or 0) >= 10:
             signals.append(
                 create_signal(
                     code="DESKTOP_UA_HIGH_TOUCH_POINTS",
