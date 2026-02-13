@@ -9,6 +9,7 @@ dependencies = [
     "fastapi>=0.119.1",
     "httpx>=0.28.1",
     "pydantic-settings>=2.11.0",
+    "rjsmin>=1.2.5",
     "uvicorn>=0.30.0",
 ]
 
