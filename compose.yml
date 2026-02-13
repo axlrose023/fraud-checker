@@ -5,9 +5,11 @@ services:
     build: .
     restart: unless-stopped
     ports:
-      - "8000:8000"
+      - "80:8000"
     environment:
       APP__ENV: prod
+      # API authentication
+      APP__API__API_KEY: ${APP__API__API_KEY}
       # Optional Turnstile captcha (values are injected via host env / .env)
       APP__FRAUD__TURNSTILE_SITE_KEY: ${APP__FRAUD__TURNSTILE_SITE_KEY}
       APP__FRAUD__TURNSTILE_SECRET_KEY: ${APP__FRAUD__TURNSTILE_SECRET_KEY}
