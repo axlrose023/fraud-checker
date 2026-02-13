@@ -1,168 +1,196 @@
-# Fraud Checker API
+# Fraud Checker
 
-Публичный сервис antifraud-проверки браузерных сигналов.
+Сервис антифрод-проверки для лендингов и веб-приложений. Анализирует браузерные сигналы посетителя в реальном времени и выносит решение: пропустить, запросить капчу или заблокировать.
 
-- Лендинг отправляет сигналы браузера в `POST /fraud/check`.
-- Сервис возвращает решение: `allow` / `review` / `block` и список причин.
+---
 
-## Setup:
+## Как это работает
+
+```
+┌─────────────┐         ┌──────────────────┐         ┌───────────────┐
+│   Браузер   │────1───▶│  GET /collector.js│────────▶│  JS-коллектор │
+│  посетителя │         └──────────────────┘         │  загружен     │
+│             │                                       └───────┬───────┘
+│             │◀──────────── собирает сигналы ─────────────────┘
+│             │
+│             │────2───▶ POST /fraud/check  ───▶ Бек анализирует сигналы
+│             │                                       │
+│             │◀─────── Ответ: allow / review / block ┘
+│             │
+│  (если review + captcha_required)
+│             │────3───▶ Показывает виджет Turnstile
+│             │         Пользователь проходит капчу
+│             │────4───▶ POST /fraud/captcha/verify
+│             │◀─────── Ответ: allow (капча пройдена) или review (не пройдена)
+└─────────────┘
+```
+
+**Шаг 1** — Фронт подгружает скрипт-коллектор. Он собирает информацию о браузере: user-agent, размер экрана, язык, таймзону, WebGL, client hints и другие сигналы.
+
+**Шаг 2** — Собранные данные отправляются на бек. Сервис прогоняет их через ~30 проверок, считает risk score и возвращает решение.
+
+**Шаг 3–4** — Если решение `review` и настроена капча — фронт показывает Cloudflare Turnstile. После прохождения токен отправляется на верификацию. Бек подтверждает капчу через Cloudflare и меняет решение на `allow`.
+
+---
+
+## Решения
+
+| Решение | Score | Что значит |
+|---------|-------|------------|
+| **allow** | 0–39 | Запрос выглядит легитимным, пропускаем |
+| **review** | 40–69 | Подозрительный запрос, требуется капча |
+| **block** | 70–100 | Высокая вероятность бота/фрода, блокируем |
+
+Пороги настраиваются через переменные окружения (`BLOCK_SCORE_THRESHOLD`, `REVIEW_SCORE_THRESHOLD`).
+
+---
+
+## Какие проверки выполняются
+
+### Автоматизация и боты
+
+| Проверка | Что ловит | Вес |
+|----------|-----------|-----|
+| WebDriver включён | Selenium, Puppeteer, Playwright | 70 |
+| Маркеры автоматизации в UA | HeadlessChrome, PhantomJS | 55 |
+| Сильные бот-маркеры в UA | curl, python-requests, go-http-client | 85 |
+| Слабые бот-маркеры в UA | bot, crawler, spider | 45 |
+
+### Устройство и экран
+
+| Проверка | Что ловит | Вес |
+|----------|-----------|-----|
+| Мобильный UA + десктопный экран | Эмуляция мобильного на десктопе | 30 |
+| Мобильный UA + 0 touch points | Подделка мобильного устройства | 15 |
+| Viewport больше экрана | Манипуляция с размерами окна | 8–15 |
+| Несовпадение UA и navigator.platform | UA говорит Windows, platform — Mac | 15 |
+| Client Hints не совпадают с UA | Подделка заголовков | 15–20 |
+
+### Заголовки и язык
+
+| Проверка | Что ловит | Вес |
+|----------|-----------|-----|
+| User-Agent заголовка ≠ payload | Подмена UA после отправки | 40 |
+| Accept-Language ≠ navigator.language | Несовпадение языковых настроек | 8–15 |
+| sec-ch-ua brands не совпадают | Подделка Client Hints заголовков | 10–25 |
+| sec-ch-ua-mobile / platform mismatch | Расхождение мобильности/платформы | 15–20 |
+
+### Геолокация и IP
+
+| Проверка | Что ловит | Вес |
+|----------|-----------|-----|
+| IP страны ≠ заявленная страна | VPN, прокси, подмена локации | 35 |
+| Таймзона IP ≠ таймзона браузера | Несовпадение часовых поясов | 15 |
+| Геолокация далеко от IP | Расстояние > 800 км | 25 |
+| IP хостинг-провайдера | Дата-центр, VPN, прокси | 20 |
+| Client IP ≠ реальный IP | Клиент заявляет чужой IP | 30 |
+
+### Система и окружение
+
+| Проверка | Что ловит | Вес |
+|----------|-----------|-----|
+| Софтверный WebGL (SwiftShader) | Headless-браузер, VM без GPU | 25 |
+| 0 плагинов на десктопном Chromium | Headless или песочница | 12 |
+| Очень мало памяти/ядер | Контейнер или VM | 8–10 |
+
+### Время и rate limit
+
+| Проверка | Что ловит | Вес |
+|----------|-----------|-----|
+| Timestamp в будущем | Подделка времени | 12 |
+| Устаревший snapshot (> 10 мин) | Replay-атака | 18 |
+| Превышение rate limit | Массовые запросы с одного IP | 100 (блок) |
+
+---
+
+## Подсчёт score
+
+Каждая сработавшая проверка добавляет свой вес к общему score. Итоговый score ограничен диапазоном 0–100. Например:
+
+- Обычный посетитель: score = 0 → **allow**
+- HeadlessChrome: `AUTOMATION_UA_MARKER` (55) → score = 55 → **review** → капча
+- Selenium + WebDriver: `WEBDRIVER_ENABLED` (70) → score = 70 → **block**
+- curl: `STRONG_BOT_UA_MARKER` (85) → score = 85 → **block**
+
+---
+
+## Эндпоинты
+
+| Метод | Путь | Назначение |
+|-------|------|------------|
+| GET | `/fraud/collector.js` | JS-скрипт для сбора браузерных сигналов |
+| POST | `/fraud/check` | Основная проверка — принимает сигналы, возвращает решение |
+| POST | `/fraud/captcha/verify` | Верификация токена капчи по challenge_id |
+
+---
+
+## Интеграция на фронте
+
+### Автоматический режим (рекомендуется)
+
+Один вызов — сбор сигналов, проверка и капча если нужна:
+
+```html
+<div id="captcha"></div>
+<script src="https://YOUR_DOMAIN/fraud/collector.js"></script>
+<script>
+  FraudCollector.run({
+    checkEndpoint: 'https://YOUR_DOMAIN/fraud/check',
+    captchaVerifyEndpoint: 'https://YOUR_DOMAIN/fraud/captcha/verify',
+    captchaContainer: '#captcha',
+    options: { eventId: 'lead-123', sessionId: 'sess-1' }
+  }).then(result => {
+    if (result.decision === 'allow') {
+      // продолжить (отправить форму, перейти к оплате)
+    } else {
+      // заблокировано или капча не пройдена
+    }
+  });
+</script>
+```
+
+### Ручной режим
+
+Если нужен полный контроль над UI — используйте методы `FraudCollector.check()`, `FraudCollector.verifyCaptcha()` и `FraudCollector.collectSignals()` по отдельности.
+
+---
+
+## Капча (Cloudflare Turnstile)
+
+Капча включается автоматически если заданы переменные:
+
+```
+APP__FRAUD__TURNSTILE_SITE_KEY=...
+APP__FRAUD__TURNSTILE_SECRET_KEY=...
+```
+
+Для локальной разработки можно использовать тестовые ключи Cloudflare (always-pass).
+
+Без этих переменных сервис работает без капчи — только allow/block на основе score.
+
+---
+
+## Запуск
+
 ```bash
+# Локально
 uv sync
-```
-
-### Start with uv
-```bash
 uv run app
-```
 
-### Start with docker
-```bash
+# Docker
 docker compose up --build -d
 ```
 
-## Public Fraud API
+## Конфигурация
 
-### Endpoints
-- `POST /fraud/check` - проверка события.
-- `POST /fraud/captcha/verify` - проверка токена капчи по `challenge_id`.
-- `GET /fraud/collector.js` - готовый JS-коллектор браузерных сигналов.
+Все настройки задаются через переменные окружения с префиксом `APP__`. Значения по умолчанию уже заданы в коде — `.env` нужен только для переопределения.
 
-### Что отправлять с браузера
-
-Обязательные блоки:
-- `navigator`: `user_agent`, `language`, `languages`, `platform`, `webdriver`, `hardware_concurrency`, `device_memory`, `max_touch_points`, `cookie_enabled`, `plugins_count`
-- `screen`: `width`, `height`, `avail_width`, `avail_height`, `color_depth`, `pixel_ratio`
-- `viewport`: `width`, `height`
-
-Опциональные блоки:
-- `webgl`: `vendor`, `renderer`
-- `location`: `country_iso`, `timezone`, `utc_offset_minutes`, `latitude`, `longitude`, `accuracy_meters`
-- `client_hints`: `mobile`, `platform`, `brands`
-- `client_reported_ip`, `event_id`, `session_id`
-
-### Пример запроса
-```bash
-curl -X POST http://localhost:8000/fraud/check \
-  -H "Content-Type: application/json" \
-  -d '{
-    "event_id": "lead-123",
-    "session_id": "sess-1",
-    "navigator": {
-      "user_agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X)",
-      "language": "en-US",
-      "languages": ["en-US", "en"],
-      "platform": "iPhone",
-      "webdriver": false,
-      "hardware_concurrency": 6,
-      "device_memory": 4,
-      "max_touch_points": 5,
-      "cookie_enabled": true,
-      "plugins_count": 0
-    },
-    "screen": {
-      "width": 390,
-      "height": 844,
-      "avail_width": 390,
-      "avail_height": 820,
-      "color_depth": 24,
-      "pixel_ratio": 3
-    },
-    "viewport": {
-      "width": 390,
-      "height": 730
-    },
-    "location": {
-      "country_iso": "US",
-      "timezone": "America/New_York",
-      "utc_offset_minutes": -300
-    },
-    "collected_at": "2026-02-12T12:00:00Z"
-  }'
-```
-
-### Пример ответа
-```json
-{
-  "decision": "review",
-  "risk_score": 45,
-  "fingerprint_id": "4f9ea34f08d91a3f813f9ac2",
-  "request_ip": "203.0.113.10",
-  "ip_country_iso": "US",
-  "signals": [
-    {
-      "code": "AUTOMATION_UA_MARKER",
-      "severity": "high",
-      "weight": 45,
-      "message": "User-Agent contains known automation markers."
-    }
-  ],
-  "captcha_required": false,
-  "captcha_verified": false,
-  "captcha_provider": null,
-  "captcha_site_key": null,
-  "captcha_error_codes": [],
-  "challenge_id": null,
-  "evaluated_at": "2026-02-12T12:00:00Z"
-}
-```
-
-## Captcha Challenge (Опционально)
-
-Капча Turnstile включается автоматически, если заданы:
-- `APP__FRAUD__TURNSTILE_SITE_KEY`
-- `APP__FRAUD__TURNSTILE_SECRET_KEY`
-
-При решении `review` сервис вернет `captcha_required=true` и `challenge_id`.
-После прохождения капчи лендинг должен отправить `captcha_token` на `POST /fraud/captcha/verify`.
-
-### Интеграция с лендинга
-Лендинг сам собирает browser-сигналы и отправляет JSON в `POST /fraud/check`.
-
-### Интеграция через collector.js
-```html
-<script src="https://YOUR_API_DOMAIN/fraud/collector.js"></script>
-<script>
-  FraudCollector.check("https://YOUR_API_DOMAIN/fraud/check", {
-    eventId: "lead-123",
-    sessionId: "sess-1",
-    countryIso: "US",
-    includeGeolocation: false
-  }).then((result) => {
-    console.log(result.decision, result.risk_score, result.signals);
-  });
-</script>
-```
-
-### collector.js + авто капча (Turnstile)
-```html
-<div id="captcha"></div>
-<script src="https://YOUR_API_DOMAIN/fraud/collector.js"></script>
-<script>
-  FraudCollector.run({
-    checkEndpoint: "https://YOUR_API_DOMAIN/fraud/check",
-    captchaVerifyEndpoint: "https://YOUR_API_DOMAIN/fraud/captcha/verify",
-    captchaContainer: "#captcha",
-    options: {
-      eventId: "lead-123",
-      sessionId: "sess-1",
-      countryIso: "US",
-      includeGeolocation: false
-    }
-  }).then((result) => {
-    console.log(result.decision, result.captcha_verified, result.risk_score);
-  });
-</script>
-```
-
-## Pre-commit hooks
-
-Install and setup pre-commit hooks:
-```bash
-uv sync --group dev
-pre-commit install
-```
-
-Run hooks manually:
-```bash
-pre-commit run --all-files
-```
+| Переменная | По умолчанию | Описание |
+|-----------|-------------|----------|
+| `APP__FRAUD__BLOCK_SCORE_THRESHOLD` | 70 | Порог блокировки |
+| `APP__FRAUD__REVIEW_SCORE_THRESHOLD` | 40 | Порог показа капчи |
+| `APP__FRAUD__RATE_LIMIT_WINDOW_SECONDS` | 60 | Окно rate limit |
+| `APP__FRAUD__RATE_LIMIT_MAX_REQUESTS_PER_IP` | 120 | Лимит запросов с одного IP |
+| `APP__FRAUD__IP_GEOLOCATION_ENABLED` | false | Включить IP-геолокацию |
+| `APP__FRAUD__TURNSTILE_SITE_KEY` | — | Site key для Turnstile |
+| `APP__FRAUD__TURNSTILE_SECRET_KEY` | — | Secret key для Turnstile |

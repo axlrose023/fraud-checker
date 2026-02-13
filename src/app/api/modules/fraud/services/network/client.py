@@ -60,6 +60,9 @@ class IpGeoResult:
     longitude: float | None
 
 
+_GEO_CACHE_MAX_SIZE = 4096
+
+
 class IpGeoClient:
     def __init__(self, client: httpx.AsyncClient, config: Config):
         self._enabled = config.fraud.ip_geolocation_enabled
@@ -123,6 +126,14 @@ class IpGeoClient:
         )
 
         if self._cache_ttl_seconds > 0:
+            if len(self._cache) >= _GEO_CACHE_MAX_SIZE:
+                cutoff = now
+                stale = [k for k, (exp, _) in self._cache.items() if exp <= cutoff]
+                for k in stale:
+                    del self._cache[k]
+                if len(self._cache) >= _GEO_CACHE_MAX_SIZE:
+                    oldest = min(self._cache, key=lambda k: self._cache[k][0])
+                    del self._cache[oldest]
             self._cache[ip] = (now + self._cache_ttl_seconds, result)
 
         return result
