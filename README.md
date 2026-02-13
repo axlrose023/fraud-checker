@@ -24,6 +24,7 @@ docker compose up --build -d
 
 ### Endpoints
 - `POST /fraud/check` - проверка события.
+- `POST /fraud/step-up` - шаг капчи (проверка токена по `challenge_id`).
 - `GET /fraud/collector.js` - готовый JS-коллектор браузерных сигналов.
 
 ### Что отправлять с браузера
@@ -95,9 +96,20 @@ curl -X POST http://localhost:8000/fraud/check \
       "message": "User-Agent contains known automation markers."
     }
   ],
+  "captcha_required": false,
+  "captcha_verified": false,
+  "captcha_provider": null,
+  "captcha_site_key": null,
+  "captcha_error_codes": [],
+  "challenge_id": null,
   "evaluated_at": "2026-02-12T12:00:00Z"
 }
 ```
+
+## Captcha Step-Up (Опционально)
+
+Если включить капчу, то при решении `review` сервис вернет `captcha_required=true` и `challenge_id`.
+После прохождения капчи лендинг должен отправить `captcha_token` на `POST /fraud/step-up`.
 
 ### Интеграция с лендинга
 Лендинг сам собирает browser-сигналы и отправляет JSON в `POST /fraud/check`.
@@ -113,6 +125,27 @@ curl -X POST http://localhost:8000/fraud/check \
     includeGeolocation: false
   }).then((result) => {
     console.log(result.decision, result.risk_score, result.signals);
+  });
+</script>
+```
+
+### collector.js + авто step-up (Turnstile)
+```html
+<div id="captcha"></div>
+<script src="https://YOUR_API_DOMAIN/fraud/collector.js"></script>
+<script>
+  FraudCollector.run({
+    checkEndpoint: "https://YOUR_API_DOMAIN/fraud/check",
+    stepUpEndpoint: "https://YOUR_API_DOMAIN/fraud/step-up",
+    captchaContainer: "#captcha",
+    options: {
+      eventId: "lead-123",
+      sessionId: "sess-1",
+      countryIso: "US",
+      includeGeolocation: false
+    }
+  }).then((result) => {
+    console.log(result.decision, result.captcha_verified, result.risk_score);
   });
 </script>
 ```

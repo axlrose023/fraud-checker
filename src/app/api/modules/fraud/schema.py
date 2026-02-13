@@ -78,6 +78,13 @@ class FraudCheckRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
 
+class CaptchaStepUpRequest(BaseModel):
+    challenge_id: str = Field(..., min_length=16, max_length=256)
+    captcha_token: str = Field(..., min_length=16, max_length=8192)
+
+    model_config = ConfigDict(extra="forbid")
+
+
 class FraudSignal(BaseModel):
     code: str
     severity: Literal["low", "medium", "high"]
@@ -92,4 +99,12 @@ class FraudCheckResponse(BaseModel):
     request_ip: str | None = None
     ip_country_iso: str | None = None
     signals: list[FraudSignal]
+
+    captcha_required: bool = False
+    captcha_verified: bool = False
+    captcha_provider: str | None = None
+    captcha_site_key: str | None = None
+    captcha_error_codes: list[str] = Field(default_factory=list, max_length=50)
+    challenge_id: str | None = None
+
     evaluated_at: datetime

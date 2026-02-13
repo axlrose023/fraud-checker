@@ -1,3 +1,7 @@
+from app.api.modules.fraud.services.network.captcha import (
+    CaptchaVerificationResult,
+    CaptchaVerifierService,
+)
 from app.api.modules.fraud.services.network.client import IpGeoClient, IpGeoResult
 from app.api.modules.fraud.services.network.common import (
     RequestIpResolver,
@@ -8,6 +12,8 @@ from app.api.modules.fraud.services.network.common import (
 from app.api.modules.fraud.services.network.rate_limit import InMemoryIpRateLimiter
 
 __all__ = (
+    "CaptchaVerificationResult",
+    "CaptchaVerifierService",
     "InMemoryIpRateLimiter",
     "IpGeoClient",
     "IpGeoResult",

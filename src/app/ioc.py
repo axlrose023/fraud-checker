@@ -10,7 +10,11 @@ from app.api.modules.fraud.services.context.device import DeviceConsistencyServi
 from app.api.modules.fraud.services.context.geo import GeoConsistencyService
 from app.api.modules.fraud.services.context.ip import IpConsistencyService
 from app.api.modules.fraud.services.context.locale import LocaleConsistencyService
+from app.api.modules.fraud.services.core.challenge_store import (
+    InMemoryCaptchaChallengeStore,
+)
 from app.api.modules.fraud.services.network import (
+    CaptchaVerifierService,
     InMemoryIpRateLimiter,
     IpGeoClient,
     RequestIpResolver,
@@ -79,6 +83,12 @@ class ServicesProvider(Provider):
         return GeoConsistencyService()
 
     @provide(scope=Scope.APP)
+    def get_captcha_challenge_store(self, config: Config) -> InMemoryCaptchaChallengeStore:
+        return InMemoryCaptchaChallengeStore(
+            ttl_seconds=config.fraud.captcha_challenge_ttl_seconds,
+        )
+
+    @provide(scope=Scope.APP)
     def get_fraud_client_checks_service(
         self,
         automation_checks: AutomationChecksService,
@@ -118,6 +128,8 @@ class ServicesProvider(Provider):
         request_ip_resolver: RequestIpResolver,
         client_checks: ClientChecksCollector,
         network_checks: NetworkChecksCollector,
+        captcha_verifier: CaptchaVerifierService,
+        captcha_challenge_store: InMemoryCaptchaChallengeStore,
     ) -> FraudFacadeService:
         return FraudFacadeService(
             config=config,
@@ -125,6 +137,8 @@ class ServicesProvider(Provider):
             ip_resolver=request_ip_resolver,
             client_checks=client_checks,
             network_checks=network_checks,
+            captcha_verifier=captcha_verifier,
+            captcha_challenges=captcha_challenge_store,
         )
 
 

@@ -1,9 +1,13 @@
 from collections.abc import Mapping
 from datetime import UTC, datetime
 
-from fastapi import Request
+from fastapi import HTTPException, Request
 
-from app.api.modules.fraud.schema import FraudCheckRequest, FraudCheckResponse
+from app.api.modules.fraud.schema import (
+    CaptchaStepUpRequest,
+    FraudCheckRequest,
+    FraudCheckResponse,
+)
 from app.api.modules.fraud.services.collectors import (
     ClientChecksCollector,
     NetworkChecksCollector,
@@ -13,7 +17,11 @@ from app.api.modules.fraud.services.core import (
     create_signal,
     decision_for_score,
 )
+from app.api.modules.fraud.services.core.challenge_store import (
+    InMemoryCaptchaChallengeStore,
+)
 from app.api.modules.fraud.services.network import (
+    CaptchaVerifierService,
     InMemoryIpRateLimiter,
     RequestIpResolver,
     normalize_headers,
@@ -29,12 +37,16 @@ class FraudFacadeService:
         ip_resolver: RequestIpResolver,
         client_checks: ClientChecksCollector,
         network_checks: NetworkChecksCollector,
+        captcha_verifier: CaptchaVerifierService,
+        captcha_challenges: InMemoryCaptchaChallengeStore,
     ):
         self._config = config
         self._rate_limiter = rate_limiter
         self._ip_resolver = ip_resolver
         self._client_checks = client_checks
         self._network_checks = network_checks
+        self._captcha_verifier = captcha_verifier
+        self._captcha_challenges = captcha_challenges
 
     async def check_request(
         self,
@@ -42,10 +54,12 @@ class FraudFacadeService:
         payload: FraudCheckRequest,
     ) -> FraudCheckResponse:
         request_ip = self._ip_resolver.get_request_ip(request)
+        origin = request.headers.get("origin")
         return await self.check(
             payload=payload,
             request_ip=request_ip,
             request_headers=request.headers,
+            origin=origin,
         )
 
     async def check(
@@ -53,6 +67,7 @@ class FraudFacadeService:
         payload: FraudCheckRequest,
         request_ip: str | None,
         request_headers: Mapping[str, str] | None = None,
+        origin: str | None = None,
     ) -> FraudCheckResponse:
         allowed = await self._rate_limiter.allow(request_ip)
         if not allowed:
@@ -68,6 +83,8 @@ class FraudFacadeService:
                         message="Too many requests from this IP in a short time.",
                     )
                 ],
+                captcha_required=False,
+                captcha_verified=False,
                 evaluated_at=datetime.now(UTC),
             )
 
@@ -91,12 +108,119 @@ class FraudFacadeService:
             review_score_threshold=self._config.fraud.review_score_threshold,
         )
 
-        return FraudCheckResponse(
+        response = FraudCheckResponse(
             decision=decision,
             risk_score=score,
             fingerprint_id=build_fingerprint(payload),
             request_ip=request_ip,
             ip_country_iso=ip_geo.country_iso if ip_geo else None,
             signals=signals,
+            captcha_required=False,
+            captcha_verified=False,
+            evaluated_at=datetime.now(UTC),
+        )
+        if (
+            decision == "review"
+            and self._captcha_verifier.is_configured()
+            and self._captcha_challenges.ttl_seconds > 0
+        ):
+            challenge_id = await self._captcha_challenges.create(
+                response=response.model_copy(deep=True),
+                request_ip=request_ip,
+                origin=origin,
+            )
+            response.captcha_required = True
+            response.captcha_provider = self._captcha_verifier.provider
+            response.captcha_site_key = self._captcha_verifier.site_key
+            response.challenge_id = challenge_id
+
+        return response
+
+    async def step_up_request(
+        self,
+        request: Request,
+        payload: CaptchaStepUpRequest,
+    ) -> FraudCheckResponse:
+        request_ip = self._ip_resolver.get_request_ip(request)
+        origin = request.headers.get("origin")
+
+        challenge = await self._captcha_challenges.get(payload.challenge_id)
+        if not challenge:
+            raise HTTPException(status_code=404, detail="captcha_challenge_not_found")
+
+        if not await self._rate_limiter.allow(request_ip):
+            return FraudCheckResponse(
+                decision="block",
+                risk_score=100,
+                fingerprint_id=challenge.response.fingerprint_id,
+                request_ip=request_ip,
+                signals=[
+                    create_signal(
+                        code="RATE_LIMIT_EXCEEDED",
+                        weight=100,
+                        message="Too many requests from this IP in a short time.",
+                    )
+                ],
+                captcha_required=False,
+                captcha_verified=False,
+                evaluated_at=datetime.now(UTC),
+            )
+
+        if (
+            challenge.request_ip
+            and request_ip
+            and challenge.request_ip != request_ip
+        ):
+            raise HTTPException(status_code=400, detail="captcha_challenge_ip_mismatch")
+
+        if (
+            challenge.origin
+            and origin
+            and challenge.origin.strip().lower() != origin.strip().lower()
+        ):
+            raise HTTPException(status_code=400, detail="captcha_challenge_origin_mismatch")
+
+        verification = await self._captcha_verifier.verify(
+            token=payload.captcha_token,
+            remote_ip=request_ip,
+        )
+
+        if verification.success:
+            consumed = await self._captcha_challenges.consume(payload.challenge_id)
+            if not consumed:
+                raise HTTPException(status_code=404, detail="captcha_challenge_not_found")
+
+            base = consumed.response
+            return FraudCheckResponse(
+                decision="allow",
+                risk_score=base.risk_score,
+                fingerprint_id=base.fingerprint_id,
+                request_ip=request_ip,
+                ip_country_iso=base.ip_country_iso,
+                signals=base.signals,
+                captcha_required=False,
+                captcha_verified=True,
+                captcha_provider=self._captcha_verifier.provider,
+                captcha_site_key=self._captcha_verifier.site_key,
+                captcha_error_codes=[],
+                challenge_id=payload.challenge_id,
+                evaluated_at=datetime.now(UTC),
+            )
+
+        await self._captcha_challenges.increment_attempts(payload.challenge_id)
+        base = challenge.response
+        return FraudCheckResponse(
+            decision=base.decision,
+            risk_score=base.risk_score,
+            fingerprint_id=base.fingerprint_id,
+            request_ip=request_ip,
+            ip_country_iso=base.ip_country_iso,
+            signals=base.signals,
+            captcha_required=True,
+            captcha_verified=False,
+            captcha_provider=self._captcha_verifier.provider,
+            captcha_site_key=self._captcha_verifier.site_key,
+            captcha_error_codes=verification.error_codes,
+            challenge_id=payload.challenge_id,
             evaluated_at=datetime.now(UTC),
         )

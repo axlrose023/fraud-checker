@@ -5,7 +5,7 @@ from collections.abc import AsyncIterator
 import httpx
 from dishka import Provider, Scope, provide
 
-from app.api.modules.fraud.services.network import IpGeoClient
+from app.api.modules.fraud.services.network import CaptchaVerifierService, IpGeoClient
 from app.settings import Config
 
 
@@ -61,6 +61,14 @@ class HttpClientsProvider(Provider):
         config: Config,
     ) -> IpGeoClient:
         return IpGeoClient(client, config)
+
+    @provide(scope=Scope.APP)
+    def get_captcha_verifier(
+        self,
+        client: httpx.AsyncClient,
+        config: Config,
+    ) -> CaptchaVerifierService:
+        return CaptchaVerifierService(client, config)
 
     # Add more client providers here as needed:
     #

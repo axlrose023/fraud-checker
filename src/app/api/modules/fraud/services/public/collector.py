@@ -1,5 +1,45 @@
-def build_collector_script(default_endpoint: str = "/fraud/check") -> str:
+def build_collector_script(
+    default_check_endpoint: str = "/fraud/check",
+    default_step_up_endpoint: str = "/fraud/step-up",
+) -> str:
     return f"""(function(global) {{
+  const _scriptPromises = {{}};
+
+  function loadScriptOnce(src) {{
+    if (_scriptPromises[src]) return _scriptPromises[src];
+    _scriptPromises[src] = new Promise((resolve, reject) => {{
+      const s = document.createElement('script');
+      s.src = src;
+      s.async = true;
+      s.defer = true;
+      s.onload = () => resolve();
+      s.onerror = () => reject(new Error('Failed to load script: ' + src));
+      document.head.appendChild(s);
+    }});
+    return _scriptPromises[src];
+  }}
+
+  function resolveContainer(container) {{
+    if (!container) return null;
+    if (typeof container === 'string') return document.querySelector(container);
+    return container;
+  }}
+
+  async function postJson(endpoint, body) {{
+    const response = await fetch(endpoint, {{
+      method: 'POST',
+      headers: {{ 'Content-Type': 'application/json' }},
+      body: JSON.stringify(body)
+    }});
+
+    if (!response.ok) {{
+      const text = await response.text();
+      throw new Error('Request failed: ' + response.status + ' ' + text);
+    }}
+
+    return response.json();
+  }}
+
   async function maybeGetGeo(options) {{
     if (!options || !options.includeGeolocation || !navigator.geolocation) {{
       return null;
@@ -101,26 +141,85 @@ def build_collector_script(default_endpoint: str = "/fraud/check") -> str:
   }}
 
   async function check(apiUrl, options) {{
-    const endpoint = apiUrl || '{default_endpoint}';
+    const endpoint = apiUrl || '{default_check_endpoint}';
     const payload = await collectSignals(options || {{}});
-    const response = await fetch(endpoint, {{
-      method: 'POST',
-      headers: {{ 'Content-Type': 'application/json' }},
-      body: JSON.stringify(payload)
-    }});
+    return postJson(endpoint, payload);
+  }}
 
-    if (!response.ok) {{
-      const body = await response.text();
-      throw new Error('Fraud check failed: ' + response.status + ' ' + body);
+  async function stepUp(apiUrl, challengeId, captchaToken) {{
+    const endpoint = apiUrl || '{default_step_up_endpoint}';
+    return postJson(endpoint, {{
+      challenge_id: challengeId,
+      captcha_token: captchaToken
+    }});
+  }}
+
+  async function getTurnstileToken(siteKey, container, options) {{
+    await loadScriptOnce('https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit');
+    if (!global.turnstile || !global.turnstile.render) {{
+      throw new Error('Turnstile is not available after loading the script');
     }}
 
-    return response.json();
+    const el = resolveContainer(container);
+    if (!el) {{
+      throw new Error('Captcha container not found');
+    }}
+    el.innerHTML = '';
+
+    return await new Promise((resolve, reject) => {{
+      global.turnstile.render(el, {{
+        sitekey: siteKey,
+        size: (options && options.size) || 'normal',
+        action: (options && options.action) || undefined,
+        cData: (options && options.cdata) || undefined,
+        callback: (token) => resolve(token),
+        'error-callback': () => reject(new Error('Captcha error')),
+      }});
+    }});
+  }}
+
+  async function run(params) {{
+    const opts = (params && params.options) || {{}};
+    const checkEndpoint = (params && params.checkEndpoint) || '{default_check_endpoint}';
+    const stepUpEndpoint = (params && params.stepUpEndpoint) || '{default_step_up_endpoint}';
+    const captchaContainer = params && params.captchaContainer;
+
+    const initial = await check(checkEndpoint, opts);
+    if (!initial || !initial.captcha_required) {{
+      return initial;
+    }}
+
+    // If the caller did not provide a container, return the challenge so the
+    // landing can render captcha itself.
+    if (!captchaContainer) {{
+      return initial;
+    }}
+
+    if (initial.captcha_provider === 'turnstile' && initial.captcha_site_key) {{
+      if (!initial.challenge_id) {{
+        throw new Error('Captcha challenge_id is missing from the response');
+      }}
+      const token = await getTurnstileToken(
+        initial.captcha_site_key,
+        captchaContainer,
+        {{
+          action: (params && params.captchaAction) || undefined,
+          cdata: initial.challenge_id || undefined,
+          size: (params && params.captchaSize) || 'normal',
+        }}
+      );
+      return await stepUp(stepUpEndpoint, initial.challenge_id, token);
+    }}
+
+    // Provider not supported by this collector script yet.
+    return initial;
   }}
 
   global.FraudCollector = {{
     collectSignals,
-    check
+    check,
+    stepUp,
+    run
   }};
 }})(window);
 """
-
