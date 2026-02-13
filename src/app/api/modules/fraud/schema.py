@@ -78,7 +78,7 @@ class FraudCheckRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
 
-class CaptchaStepUpRequest(BaseModel):
+class CaptchaVerifyRequest(BaseModel):
     challenge_id: str = Field(..., min_length=16, max_length=256)
     captcha_token: str = Field(..., min_length=16, max_length=8192)
 

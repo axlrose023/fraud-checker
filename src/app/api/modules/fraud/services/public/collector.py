@@ -1,6 +1,6 @@
 def build_collector_script(
     default_check_endpoint: str = "/fraud/check",
-    default_step_up_endpoint: str = "/fraud/step-up",
+    default_captcha_verify_endpoint: str = "/fraud/captcha/verify",
 ) -> str:
     return f"""(function(global) {{
   const _scriptPromises = {{}};
@@ -146,8 +146,8 @@ def build_collector_script(
     return postJson(endpoint, payload);
   }}
 
-  async function stepUp(apiUrl, challengeId, captchaToken) {{
-    const endpoint = apiUrl || '{default_step_up_endpoint}';
+  async function verifyCaptcha(apiUrl, challengeId, captchaToken) {{
+    const endpoint = apiUrl || '{default_captcha_verify_endpoint}';
     return postJson(endpoint, {{
       challenge_id: challengeId,
       captcha_token: captchaToken
@@ -181,7 +181,7 @@ def build_collector_script(
   async function run(params) {{
     const opts = (params && params.options) || {{}};
     const checkEndpoint = (params && params.checkEndpoint) || '{default_check_endpoint}';
-    const stepUpEndpoint = (params && params.stepUpEndpoint) || '{default_step_up_endpoint}';
+    const captchaVerifyEndpoint = (params && params.captchaVerifyEndpoint) || '{default_captcha_verify_endpoint}';
     const captchaContainer = params && params.captchaContainer;
 
     const initial = await check(checkEndpoint, opts);
@@ -208,7 +208,7 @@ def build_collector_script(
           size: (params && params.captchaSize) || 'normal',
         }}
       );
-      return await stepUp(stepUpEndpoint, initial.challenge_id, token);
+      return await verifyCaptcha(captchaVerifyEndpoint, initial.challenge_id, token);
     }}
 
     // Provider not supported by this collector script yet.
@@ -218,7 +218,7 @@ def build_collector_script(
   global.FraudCollector = {{
     collectSignals,
     check,
-    stepUp,
+    verifyCaptcha,
     run
   }};
 }})(window);

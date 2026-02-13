@@ -27,7 +27,7 @@ class FraudConfig(BaseModel):
     ip_geolocation_base_url: str = "https://ipapi.co"
     ip_geolocation_cache_ttl_seconds: int = 300
 
-    # Optional step-up captcha (challenge) for suspicious traffic.
+    # Optional captcha challenge for suspicious traffic.
     captcha_enabled: bool = False
     captcha_provider: Literal["turnstile", "hcaptcha", "recaptcha"] = "turnstile"
     captcha_site_key: str | None = None

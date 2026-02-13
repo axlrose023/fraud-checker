@@ -4,7 +4,7 @@ from datetime import UTC, datetime
 from fastapi import HTTPException, Request
 
 from app.api.modules.fraud.schema import (
-    CaptchaStepUpRequest,
+    CaptchaVerifyRequest,
     FraudCheckRequest,
     FraudCheckResponse,
 )
@@ -55,6 +55,8 @@ class FraudFacadeService:
     ) -> FraudCheckResponse:
         request_ip = self._ip_resolver.get_request_ip(request)
         origin = request.headers.get("origin")
+        if origin and origin.strip().lower() == "null":
+            origin = None
         return await self.check(
             payload=payload,
             request_ip=request_ip,
@@ -136,13 +138,15 @@ class FraudFacadeService:
 
         return response
 
-    async def step_up_request(
+    async def verify_captcha_request(
         self,
         request: Request,
-        payload: CaptchaStepUpRequest,
+        payload: CaptchaVerifyRequest,
     ) -> FraudCheckResponse:
         request_ip = self._ip_resolver.get_request_ip(request)
         origin = request.headers.get("origin")
+        if origin and origin.strip().lower() == "null":
+            origin = None
 
         challenge = await self._captcha_challenges.get(payload.challenge_id)
         if not challenge:
@@ -166,19 +170,26 @@ class FraudFacadeService:
                 evaluated_at=datetime.now(UTC),
             )
 
-        if (
-            challenge.request_ip
-            and request_ip
-            and challenge.request_ip != request_ip
-        ):
-            raise HTTPException(status_code=400, detail="captcha_challenge_ip_mismatch")
+        if challenge.request_ip:
+            if not request_ip:
+                raise HTTPException(status_code=400, detail="captcha_challenge_ip_missing")
+            if challenge.request_ip != request_ip:
+                raise HTTPException(
+                    status_code=400,
+                    detail="captcha_challenge_ip_mismatch",
+                )
 
-        if (
-            challenge.origin
-            and origin
-            and challenge.origin.strip().lower() != origin.strip().lower()
-        ):
-            raise HTTPException(status_code=400, detail="captcha_challenge_origin_mismatch")
+        if challenge.origin:
+            if not origin:
+                raise HTTPException(
+                    status_code=400,
+                    detail="captcha_challenge_origin_missing",
+                )
+            if challenge.origin.strip().lower() != origin.strip().lower():
+                raise HTTPException(
+                    status_code=400,
+                    detail="captcha_challenge_origin_mismatch",
+                )
 
         verification = await self._captcha_verifier.verify(
             token=payload.captcha_token,

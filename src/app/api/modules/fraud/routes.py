@@ -3,7 +3,7 @@ from dishka.integrations.fastapi import DishkaRoute
 from fastapi import APIRouter, Request, Response
 
 from app.api.modules.fraud.schema import (
-    CaptchaStepUpRequest,
+    CaptchaVerifyRequest,
     FraudCheckRequest,
     FraudCheckResponse,
 )
@@ -22,13 +22,13 @@ async def check_fraud(
     return await facade.check_request(request=request, payload=payload)
 
 
-@router.post("/step-up", response_model=FraudCheckResponse, status_code=200)
-async def captcha_step_up(
+@router.post("/captcha/verify", response_model=FraudCheckResponse, status_code=200)
+async def verify_captcha(
     request: Request,
-    payload: CaptchaStepUpRequest,
+    payload: CaptchaVerifyRequest,
     facade: FromDishka[FraudFacadeService],
 ) -> FraudCheckResponse:
-    return await facade.step_up_request(request=request, payload=payload)
+    return await facade.verify_captcha_request(request=request, payload=payload)
 
 
 @router.get("/collector.js", status_code=200)

@@ -24,7 +24,7 @@ docker compose up --build -d
 
 ### Endpoints
 - `POST /fraud/check` - проверка события.
-- `POST /fraud/step-up` - шаг капчи (проверка токена по `challenge_id`).
+- `POST /fraud/captcha/verify` - проверка токена капчи по `challenge_id`.
 - `GET /fraud/collector.js` - готовый JS-коллектор браузерных сигналов.
 
 ### Что отправлять с браузера
@@ -106,10 +106,10 @@ curl -X POST http://localhost:8000/fraud/check \
 }
 ```
 
-## Captcha Step-Up (Опционально)
+## Captcha Challenge (Опционально)
 
 Если включить капчу, то при решении `review` сервис вернет `captcha_required=true` и `challenge_id`.
-После прохождения капчи лендинг должен отправить `captcha_token` на `POST /fraud/step-up`.
+После прохождения капчи лендинг должен отправить `captcha_token` на `POST /fraud/captcha/verify`.
 
 ### Интеграция с лендинга
 Лендинг сам собирает browser-сигналы и отправляет JSON в `POST /fraud/check`.
@@ -129,14 +129,14 @@ curl -X POST http://localhost:8000/fraud/check \
 </script>
 ```
 
-### collector.js + авто step-up (Turnstile)
+### collector.js + авто капча (Turnstile)
 ```html
 <div id="captcha"></div>
 <script src="https://YOUR_API_DOMAIN/fraud/collector.js"></script>
 <script>
   FraudCollector.run({
     checkEndpoint: "https://YOUR_API_DOMAIN/fraud/check",
-    stepUpEndpoint: "https://YOUR_API_DOMAIN/fraud/step-up",
+    captchaVerifyEndpoint: "https://YOUR_API_DOMAIN/fraud/captcha/verify",
     captchaContainer: "#captcha",
     options: {
       eventId: "lead-123",

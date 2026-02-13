@@ -16,11 +16,12 @@ class CaptchaChallenge:
 
 
 class InMemoryCaptchaChallengeStore:
-    """Short-lived step-up challenges keyed by challenge_id.
+    """Short-lived captcha challenges keyed by challenge_id.
 
     This allows a 2-step flow:
     1) /fraud/check performs fraud evaluation and may require captcha, returning challenge_id
-    2) /fraud/step-up verifies captcha token and finalizes the decision without re-evaluating fraud
+    2) /fraud/captcha/verify verifies captcha token and finalizes the decision
+       without re-evaluating fraud
 
     Note: per-process memory store. For multi-replica deployments, replace with Redis.
     """
@@ -108,4 +109,3 @@ class InMemoryCaptchaChallengeStore:
 
 
 __all__ = ("CaptchaChallenge", "InMemoryCaptchaChallengeStore")
-
