@@ -7,4 +7,11 @@ services:
     ports:
       - "8000:8000"
     environment:
-      - APP__ENV=prod
+      APP__ENV: prod
+      # Optional Turnstile captcha (values are injected via host env / .env)
+      APP__FRAUD__TURNSTILE_SITE_KEY: ${APP__FRAUD__TURNSTILE_SITE_KEY}
+      APP__FRAUD__TURNSTILE_SECRET_KEY: ${APP__FRAUD__TURNSTILE_SECRET_KEY}
+      APP__FRAUD__TURNSTILE_TIMEOUT_SECONDS: ${APP__FRAUD__TURNSTILE_TIMEOUT_SECONDS:-2.0}
+      APP__FRAUD__TURNSTILE_CHALLENGE_TTL_SECONDS: ${APP__FRAUD__TURNSTILE_CHALLENGE_TTL_SECONDS:-600}
+      # Useful for local testing
+      APP__FRAUD__REVIEW_SCORE_THRESHOLD: ${APP__FRAUD__REVIEW_SCORE_THRESHOLD:-40}
