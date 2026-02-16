@@ -17,9 +17,20 @@ logger = logging.getLogger(__name__)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
+    from app.database.base import Base
+    from app.database.engine import engine
+
+    # Import models so Base.metadata knows about them
+    import app.api.modules.fraud.models  # noqa: F401
+
+    logger.info("Creating database tables...")
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+
     logger.info("Starting application...")
     yield
     logger.info("Shutting down application...")
+    await engine.dispose()
 
 
 def get_production_app() -> FastAPI:

@@ -1,19 +1,47 @@
 name: fraud-checker
 
 services:
+  db:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${APP__POSTGRES__USER:-postgres}
+      POSTGRES_PASSWORD: ${APP__POSTGRES__PASSWORD:-postgres}
+      POSTGRES_DB: ${APP__POSTGRES__DB:-fraud_checker}
+      PGDATA: /var/lib/postgresql/data
+    volumes:
+      - db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${APP__POSTGRES__USER:-postgres}"]
+      interval: 5s
+      timeout: 10s
+      retries: 5
+
   app:
     build: .
     restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
     ports:
       - "80:8000"
     environment:
-      APP__ENV: prod
+      APP__ENV: ${APP__ENV:-prod}
       # API authentication
       APP__API__API_KEY: ${APP__API__API_KEY}
-      # Optional Turnstile captcha (values are injected via host env / .env)
+      # PostgreSQL
+      APP__POSTGRES__USER: ${APP__POSTGRES__USER:-postgres}
+      APP__POSTGRES__PASSWORD: ${APP__POSTGRES__PASSWORD:-postgres}
+      APP__POSTGRES__HOST: ${APP__POSTGRES__HOST:-db}
+      APP__POSTGRES__PORT: ${APP__POSTGRES__PORT:-5432}
+      APP__POSTGRES__DB: ${APP__POSTGRES__DB:-fraud_checker}
+      # Optional Turnstile captcha
       APP__FRAUD__TURNSTILE_SITE_KEY: ${APP__FRAUD__TURNSTILE_SITE_KEY}
       APP__FRAUD__TURNSTILE_SECRET_KEY: ${APP__FRAUD__TURNSTILE_SECRET_KEY}
       APP__FRAUD__TURNSTILE_TIMEOUT_SECONDS: ${APP__FRAUD__TURNSTILE_TIMEOUT_SECONDS:-2.0}
       APP__FRAUD__TURNSTILE_CHALLENGE_TTL_SECONDS: ${APP__FRAUD__TURNSTILE_CHALLENGE_TTL_SECONDS:-600}
-      # Useful for local testing
+      # Fraud detection
       APP__FRAUD__REVIEW_SCORE_THRESHOLD: ${APP__FRAUD__REVIEW_SCORE_THRESHOLD:-40}
+
+volumes:
+  db_data:

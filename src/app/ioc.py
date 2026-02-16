@@ -1,4 +1,7 @@
+from collections.abc import AsyncIterator
+
 from dishka import AsyncContainer, Provider, Scope, make_async_container, provide
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.modules.fraud.service import FraudFacadeService
 from app.api.modules.fraud.services.automation import AutomationChecksService
@@ -26,6 +29,8 @@ from app.api.modules.fraud.services.platform.timestamp import (
     TimestampConsistencyService,
 )
 from app.clients.providers import HttpClientsProvider
+from app.database.engine import SessionFactory
+from app.database.uow import UnitOfWork
 from app.settings import Config, get_config
 
 
@@ -35,6 +40,16 @@ class AppProvider(Provider):
     @provide(scope=Scope.APP)
     def get_config(self) -> Config:
         return get_config()
+
+    @provide(scope=Scope.REQUEST)
+    async def get_session(self) -> AsyncIterator[AsyncSession]:
+        async with SessionFactory() as session:
+            yield session
+
+    @provide(scope=Scope.REQUEST)
+    async def get_uow(self, session: AsyncSession) -> AsyncIterator[UnitOfWork]:
+        async with UnitOfWork(session) as uow:
+            yield uow
 
 
 class ServicesProvider(Provider):
@@ -137,6 +152,7 @@ class ServicesProvider(Provider):
         network_checks: NetworkChecksCollector,
         turnstile_verifier: TurnstileVerifierService,
         captcha_challenge_store: InMemoryCaptchaChallengeStore,
+        uow: UnitOfWork,
     ) -> FraudFacadeService:
         return FraudFacadeService(
             config=config,
@@ -146,6 +162,7 @@ class ServicesProvider(Provider):
             network_checks=network_checks,
             turnstile_verifier=turnstile_verifier,
             captcha_challenges=captcha_challenge_store,
+            uow=uow,
         )
 
 

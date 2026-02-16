@@ -14,6 +14,14 @@ class APIConfig(BaseModel):
     api_key: str | None = None
 
 
+class PostgresConfig(BaseModel):
+    user: str = "postgres"
+    password: str = "postgres"
+    host: str = "localhost"
+    port: int = 5432
+    db: str = "fraud_checker"
+
+
 class FraudConfig(BaseModel):
     block_score_threshold: int = 70
     review_score_threshold: int = 40
@@ -51,6 +59,15 @@ class Config(BaseSettings):
 
     api: APIConfig = APIConfig()
     fraud: FraudConfig = FraudConfig()
+    postgres: PostgresConfig = PostgresConfig()
+
+    @property
+    def database_url(self) -> str:
+        p = self.postgres
+        host = "localhost" if self.env == "local" else p.host
+        return (
+            f"postgresql+asyncpg://{p.user}:{p.password}@{host}:{p.port}/{p.db}"
+        )
 
 
 @lru_cache

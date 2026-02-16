@@ -3,6 +3,8 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from app.api.common.schema import Pagination, PaginationParams
+
 
 class NavigatorSignals(BaseModel):
     user_agent: str = Field(..., min_length=10, max_length=2048)
@@ -121,3 +123,34 @@ class FraudCheckResponse(BaseModel):
     challenge_id: str | None = None
 
     evaluated_at: datetime
+
+
+
+
+class FraudCheckLogResponse(BaseModel):
+    id: int
+    created_at: datetime
+    request_ip: str | None = None
+    ip_country_iso: str | None = None
+    fingerprint_id: str
+    origin: str | None = None
+    request_payload: dict
+    decision: str
+    risk_score: int
+    signals: list[FraudSignal]
+    captcha_required: bool = False
+    captcha_verified: bool = False
+    challenge_id: str | None = None
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class FraudCheckLogPaginationParams(PaginationParams):
+    decision: str | None = None
+    request_ip: str | None = None
+    fingerprint_id: str | None = None
+    risk_score__gte: int | None = None
+    risk_score__lte: int | None = None
+
+
+FraudCheckLogListResponse = Pagination[FraudCheckLogResponse]

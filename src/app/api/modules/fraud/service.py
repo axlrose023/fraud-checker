@@ -1,8 +1,10 @@
+import logging
 from collections.abc import Mapping
 from datetime import UTC, datetime
 
 from fastapi import HTTPException, Request
 
+from app.api.modules.fraud.models import FraudCheckLog
 from app.api.modules.fraud.schema import (
     CaptchaVerifyRequest,
     FraudCheckRequest,
@@ -26,7 +28,10 @@ from app.api.modules.fraud.services.network import (
     TurnstileVerifierService,
     normalize_headers,
 )
+from app.database.uow import UnitOfWork
 from app.settings import Config
+
+logger = logging.getLogger(__name__)
 
 
 class FraudFacadeService:
@@ -39,6 +44,7 @@ class FraudFacadeService:
         network_checks: NetworkChecksCollector,
         turnstile_verifier: TurnstileVerifierService,
         captcha_challenges: InMemoryCaptchaChallengeStore,
+        uow: UnitOfWork,
     ):
         self._config = config
         self._rate_limiter = rate_limiter
@@ -47,6 +53,33 @@ class FraudFacadeService:
         self._network_checks = network_checks
         self._turnstile_verifier = turnstile_verifier
         self._captcha_challenges = captcha_challenges
+        self._uow = uow
+
+    async def _save_log(
+        self,
+        response: FraudCheckResponse,
+        payload: FraudCheckRequest | None = None,
+        origin: str | None = None,
+    ) -> None:
+        try:
+            log = FraudCheckLog(
+                request_ip=response.request_ip,
+                ip_country_iso=response.ip_country_iso,
+                fingerprint_id=response.fingerprint_id,
+                origin=origin,
+                request_payload=payload.model_dump(mode="json") if payload else {},
+                decision=response.decision,
+                risk_score=response.risk_score,
+                signals=[s.model_dump() for s in response.signals],
+                captcha_required=response.captcha_required,
+                captcha_verified=response.captcha_verified,
+                challenge_id=response.challenge_id,
+            )
+            await self._uow.fraud_logs.create(log)
+            await self._uow.commit()
+        except Exception:
+            logger.exception("Failed to save fraud check log")
+            await self._uow.rollback()
 
     async def check_request(
         self,
@@ -136,6 +169,7 @@ class FraudFacadeService:
             response.captcha_site_key = self._turnstile_verifier.site_key
             response.challenge_id = challenge_id
 
+        await self._save_log(response=response, payload=payload, origin=origin)
         return response
 
     async def verify_captcha_request(
@@ -202,7 +236,7 @@ class FraudFacadeService:
                 raise HTTPException(status_code=404, detail="captcha_challenge_not_found")
 
             base = consumed.response
-            return FraudCheckResponse(
+            response = FraudCheckResponse(
                 decision="allow",
                 risk_score=base.risk_score,
                 fingerprint_id=base.fingerprint_id,
@@ -217,10 +251,12 @@ class FraudFacadeService:
                 challenge_id=payload.challenge_id,
                 evaluated_at=datetime.now(UTC),
             )
+            await self._save_log(response=response, origin=origin)
+            return response
 
         await self._captcha_challenges.increment_attempts(payload.challenge_id)
         base = challenge.response
-        return FraudCheckResponse(
+        response = FraudCheckResponse(
             decision=base.decision,
             risk_score=base.risk_score,
             fingerprint_id=base.fingerprint_id,
@@ -235,3 +271,5 @@ class FraudFacadeService:
             challenge_id=payload.challenge_id,
             evaluated_at=datetime.now(UTC),
         )
+        await self._save_log(response=response, origin=origin)
+        return response
