@@ -5,6 +5,9 @@ from app.api.modules.fraud.services.network.common import (
     normalize_ip,
     normalize_text,
 )
+from app.api.modules.fraud.services.network.fingerprint_velocity import (
+    FingerprintVelocityTracker,
+)
 from app.api.modules.fraud.services.network.rate_limit import InMemoryIpRateLimiter
 from app.api.modules.fraud.services.network.turnstile import (
     TurnstileVerificationResult,
@@ -12,6 +15,7 @@ from app.api.modules.fraud.services.network.turnstile import (
 )
 
 __all__ = (
+    "FingerprintVelocityTracker",
     "InMemoryIpRateLimiter",
     "IpGeoClient",
     "IpGeoResult",

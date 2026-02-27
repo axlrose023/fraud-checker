@@ -33,7 +33,7 @@ class RequestIpResolver:
 
     def get_request_ip(self, request: Request) -> str | None:
         if self._trust_forwarded_ip:
-            for header in ("x-forwarded-for", "x-real-ip"):
+            for header in ("cf-connecting-ip", "x-forwarded-for", "x-real-ip"):
                 value = request.headers.get(header)
                 ip = normalize_ip(value)
                 if ip:

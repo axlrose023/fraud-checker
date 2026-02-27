@@ -10,6 +10,9 @@ from app.api.modules.fraud.services.collectors import (
     NetworkChecksCollector,
 )
 from app.api.modules.fraud.services.context.behavior import BehaviorConsistencyService
+from app.api.modules.fraud.services.context.behavior_similarity import (
+    BehaviorSimilarityService,
+)
 from app.api.modules.fraud.services.context.device import DeviceConsistencyService
 from app.api.modules.fraud.services.context.geo import GeoConsistencyService
 from app.api.modules.fraud.services.context.ip import IpConsistencyService
@@ -18,6 +21,7 @@ from app.api.modules.fraud.services.core.challenge_store import (
     InMemoryCaptchaChallengeStore,
 )
 from app.api.modules.fraud.services.network import (
+    FingerprintVelocityTracker,
     InMemoryIpRateLimiter,
     IpGeoClient,
     RequestIpResolver,
@@ -103,6 +107,18 @@ class ServicesProvider(Provider):
         return GeoConsistencyService()
 
     @provide(scope=Scope.APP)
+    def get_fingerprint_velocity_tracker(
+        self, config: Config
+    ) -> FingerprintVelocityTracker:
+        return FingerprintVelocityTracker(config=config.fraud)
+
+    @provide(scope=Scope.APP)
+    def get_behavior_similarity_service(
+        self, config: Config
+    ) -> BehaviorSimilarityService:
+        return BehaviorSimilarityService(config=config.fraud)
+
+    @provide(scope=Scope.APP)
     def get_captcha_challenge_store(self, config: Config) -> InMemoryCaptchaChallengeStore:
         return InMemoryCaptchaChallengeStore(
             ttl_seconds=config.fraud.turnstile_challenge_ttl_seconds,
@@ -152,6 +168,8 @@ class ServicesProvider(Provider):
         network_checks: NetworkChecksCollector,
         turnstile_verifier: TurnstileVerifierService,
         captcha_challenge_store: InMemoryCaptchaChallengeStore,
+        fingerprint_velocity: FingerprintVelocityTracker,
+        behavior_similarity: BehaviorSimilarityService,
         uow: UnitOfWork,
     ) -> FraudFacadeService:
         return FraudFacadeService(
@@ -162,6 +180,8 @@ class ServicesProvider(Provider):
             network_checks=network_checks,
             turnstile_verifier=turnstile_verifier,
             captcha_challenges=captcha_challenge_store,
+            fingerprint_velocity=fingerprint_velocity,
+            behavior_similarity=behavior_similarity,
             uow=uow,
         )
 

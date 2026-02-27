@@ -22,7 +22,11 @@ from app.api.modules.fraud.services.core import (
 from app.api.modules.fraud.services.core.challenge_store import (
     InMemoryCaptchaChallengeStore,
 )
+from app.api.modules.fraud.services.context.behavior_similarity import (
+    BehaviorSimilarityService,
+)
 from app.api.modules.fraud.services.network import (
+    FingerprintVelocityTracker,
     InMemoryIpRateLimiter,
     RequestIpResolver,
     TurnstileVerifierService,
@@ -44,6 +48,8 @@ class FraudFacadeService:
         network_checks: NetworkChecksCollector,
         turnstile_verifier: TurnstileVerifierService,
         captcha_challenges: InMemoryCaptchaChallengeStore,
+        fingerprint_velocity: FingerprintVelocityTracker,
+        behavior_similarity: BehaviorSimilarityService,
         uow: UnitOfWork,
     ):
         self._config = config
@@ -53,6 +59,8 @@ class FraudFacadeService:
         self._network_checks = network_checks
         self._turnstile_verifier = turnstile_verifier
         self._captcha_challenges = captcha_challenges
+        self._fingerprint_velocity = fingerprint_velocity
+        self._behavior_similarity = behavior_similarity
         self._uow = uow
 
     async def _save_log(
@@ -104,12 +112,14 @@ class FraudFacadeService:
         request_headers: Mapping[str, str] | None = None,
         origin: str | None = None,
     ) -> FraudCheckResponse:
+        fingerprint_id = build_fingerprint(payload)
+
         allowed = await self._rate_limiter.allow(request_ip)
         if not allowed:
             return FraudCheckResponse(
                 decision="block",
                 risk_score=100,
-                fingerprint_id=build_fingerprint(payload),
+                fingerprint_id=fingerprint_id,
                 request_ip=request_ip,
                 signals=[
                     create_signal(
@@ -136,6 +146,17 @@ class FraudFacadeService:
         )
         signals.extend(network_signals)
 
+        velocity_signals = await self._fingerprint_velocity.record_and_check(
+            fingerprint_id,
+        )
+        signals.extend(velocity_signals)
+
+        similarity_signals = await self._behavior_similarity.record_and_check(
+            fingerprint_id=fingerprint_id,
+            behavior=payload.behavior,
+        )
+        signals.extend(similarity_signals)
+
         score = min(sum(signal.weight for signal in signals), 100)
         decision = decision_for_score(
             score=score,
@@ -146,7 +167,7 @@ class FraudFacadeService:
         response = FraudCheckResponse(
             decision=decision,
             risk_score=score,
-            fingerprint_id=build_fingerprint(payload),
+            fingerprint_id=fingerprint_id,
             request_ip=request_ip,
             ip_country_iso=ip_geo.country_iso if ip_geo else None,
             signals=signals,

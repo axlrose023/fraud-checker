@@ -14,6 +14,9 @@ def looks_like_hosting_provider(org: str) -> bool:
         return False
 
     marker = org.lower()
+    # CDN/proxy providers that route legitimate traffic — not hosting.
+    if "cloudflare" in marker:
+        return False
     signatures = (
         "hosting",
         "data center",

@@ -26,15 +26,34 @@ class FraudConfig(BaseModel):
     block_score_threshold: int = 70
     review_score_threshold: int = 40
 
-    trust_forwarded_ip: bool = False
+    trust_forwarded_ip: bool = True
 
     rate_limit_window_seconds: int = 60
     rate_limit_max_requests_per_ip: int = 120
 
-    ip_geolocation_enabled: bool = False
+    ip_geolocation_enabled: bool = True
     ip_geolocation_timeout_seconds: float = 1.5
     ip_geolocation_base_url: str = "https://ipapi.co"
     ip_geolocation_cache_ttl_seconds: int = 300
+
+    # Fingerprint velocity: detect repeated submissions from the same device.
+    fingerprint_velocity_window_seconds: int = 3600
+    fingerprint_velocity_warn_threshold: int = 3
+    fingerprint_velocity_warn_weight: int = 25
+    fingerprint_velocity_suspicious_threshold: int = 5
+    fingerprint_velocity_suspicious_weight: int = 45
+    fingerprint_velocity_critical_threshold: int = 10
+    fingerprint_velocity_critical_weight: int = 75
+
+    # Behavior similarity: detect robotic repetition of interaction patterns.
+    behavior_similarity_history_size: int = 10
+    behavior_similarity_window_seconds: int = 3600
+    behavior_similarity_tolerance_pct: float = 0.15
+    behavior_similarity_match_ratio: float = 0.80
+    behavior_similarity_warn_threshold: int = 3
+    behavior_similarity_warn_weight: int = 25
+    behavior_similarity_suspicious_threshold: int = 5
+    behavior_similarity_suspicious_weight: int = 40
 
     # Optional Turnstile captcha challenge for suspicious traffic.
     turnstile_site_key: str | None = None
